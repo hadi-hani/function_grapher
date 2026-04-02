@@ -107,7 +107,7 @@ header{
 .btn-icon:active{transform:scale(.97)}
 
 /* ── Main area ── */
-#main{display:flex;flex:1;overflow:hidden}
+#main{display:flex;flex:1;overflow:hidden;position:relative}
 
 /* Sidebar */
 #sidebar{
@@ -141,7 +141,11 @@ header{
 
 .fn-swatch{width:10px;height:10px;border-radius:2px;flex-shrink:0}
 .fn-label{flex:1;font-family:var(--mono);font-size:.75rem;color:var(--text);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;outline:none}
+.fn-label[contenteditable="true"]:focus{
+  overflow:visible;white-space:normal;word-break:break-all;
+  background:var(--bg);box-shadow:0 0 0 2px var(--primary);border-radius:2px;
+}
 .fn-toggle,.fn-delete{
   width:20px;height:20px;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
@@ -209,11 +213,13 @@ canvas{display:block;width:100%;height:100%}
   opacity:1;transition:opacity .5s;
 }
 
-/* Sidebar toggle btn */
-#btn-sb{position:absolute;left:.75rem;top:.75rem;z-index:5}
-
 @media(max-width:640px){
-  #sidebar{display:none}
+  #sidebar{
+    position:absolute;
+    height:100%;
+    z-index:100;
+    box-shadow:var(--shadow-lg);
+  }
   .logo-text{display:none}
   .fn-prefix{display:none}
 }
@@ -223,6 +229,9 @@ canvas{display:block;width:100%;height:100%}
 <div id="app">
   <!-- Header -->
   <header>
+    <button class="btn-icon" id="btn-sb" title="إخفاء/إظهار القائمة">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <div class="logo">
       <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
         <rect x="2.5" y="2.5" width="21" height="21" rx="5" stroke="currentColor" stroke-width="1.4"/>
@@ -369,7 +378,10 @@ function renderSidebar() {
     card.className = 'fn-card';
     card.innerHTML = `
       <div class="fn-swatch" style="background:${fn.color};opacity:${fn.visible?1:.35}"></div>
-      <span class="fn-label" style="opacity:${fn.visible?1:.45}" title="${fn.expr}">f(x) = ${fn.expr}</span>
+      <div style="flex:1; display:flex; align-items:center; overflow:hidden;" dir="ltr">
+        <span style="font-family:var(--mono); font-size:.75rem; color:var(--muted); margin-right:3px; opacity:${fn.visible?1:.45}">f(x)=</span>
+        <span class="fn-label" contenteditable="true" spellcheck="false" style="opacity:${fn.visible?1:.45}; color:${fn.compiled ? 'var(--text)' : 'var(--error)'};" title="${fn.expr}">${fn.expr}</span>
+      </div>
       <button class="fn-toggle" title="${fn.visible?'إخفاء':'إظهار'}" data-id="${fn.id}">
         ${fn.visible
           ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
@@ -379,6 +391,26 @@ function renderSidebar() {
       <button class="fn-delete" title="حذف" data-id="${fn.id}">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>`;
+      
+    const lbl = card.querySelector('.fn-label');
+    lbl.addEventListener('mousedown', e => e.stopPropagation());
+    lbl.addEventListener('keydown', e => {
+      if(e.key === 'Enter') { e.preventDefault(); lbl.blur(); }
+    });
+    lbl.addEventListener('blur', e => {
+      const newExpr = lbl.textContent.trim();
+      if(!newExpr) {
+        removeFunction(fn.id);
+      } else if(newExpr !== fn.expr) {
+        const compiled = compileExpr(newExpr);
+        fn.expr = newExpr;
+        fn.compiled = compiled;
+        lbl.title = newExpr;
+        render(); // redraw canvas
+        renderSidebar(); // re-render sidebar to apply text/error tint properly
+      }
+    });
+
     card.querySelector('.fn-toggle').addEventListener('click', e => {
       e.stopPropagation(); toggleFunction(+e.currentTarget.dataset.id);
     });
@@ -677,6 +709,13 @@ document.getElementById('btn-theme').addEventListener('click',()=>{
 setTimeout(()=>{const h=document.getElementById('hint');if(h){h.style.opacity='0';setTimeout(()=>h.remove(),600)}},3500);
 
 // Init
+if(window.innerWidth <= 640) {
+  document.getElementById('sidebar').classList.add('collapsed');
+}
+document.getElementById('btn-sb').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+  setTimeout(resize, 250);
+});
 window.addEventListener('resize',resize);
 resize();
 
